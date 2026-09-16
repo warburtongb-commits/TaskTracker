@@ -1,0 +1,1039 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500..800&family=Figtree:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<!--
+  ============================================================
+  PROJECT TRACKER
+  ============================================================
+
+  WHAT YOU EDIT, AND WHERE:
+
+  1. Colours and fonts .... the :root block right below this comment
+  2. App name, API URL .... the CONFIG block near the bottom of this file
+  3. Everything else ...... you probably don't need to touch
+
+  TO CONNECT THE GOOGLE SHEET:
+  Paste your Apps Script /exec URL into CONFIG.API_URL below.
+  Leave it empty and the dashboard runs in local demo mode
+  (saves to this browser only) so you can try it before wiring it up.
+  ============================================================
+-->
+
+<style>
+:root{
+  /* ---- Colour. Change these six and the whole dashboard reskins. ---- */
+  --paper:      #FFF4EC;   /* page background, warm apricot white */
+  --card:       #FFFFFF;   /* card surfaces */
+  --ink:        #2E1F3D;   /* primary text, deep plum */
+  --ink-2:      #6E5C7C;   /* secondary text */
+  --flame:      #FF6B35;   /* primary accent */
+  --grape:      #7B3FA0;   /* secondary accent, progress + structure */
+
+  /* ---- Status colours ---- */
+  --mint:  #17A67A;        /* complete / on track */
+  --amber: #E8940B;        /* on hold */
+  --rose:  #E8436B;        /* overdue */
+
+  /* ---- Derived. Usually leave alone. ---- */
+  --line:    #F2DED2;
+  --line-2:  #FBEDE4;
+  --shadow:  0 1px 2px rgba(74,42,20,.05), 0 8px 24px -12px rgba(74,42,20,.18);
+  --radius:  14px;
+
+  color-scheme: light;
+}
+
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:15px;
+  line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.num{font-family:"Bricolage Grotesque","Figtree",sans-serif;font-weight:700;letter-spacing:-.02em;margin:0}
+.num{font-variant-numeric:tabular-nums}
+button{font-family:inherit;font-size:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit;font-size:inherit;color:var(--ink)}
+:focus-visible{outline:2.5px solid var(--grape);outline-offset:2px;border-radius:4px}
+
+.wrap{max-width:1080px;margin:0 auto;padding:0 20px}
+
+/* ---------- Top bar ---------- */
+.topbar{
+  position:sticky;top:0;z-index:40;
+  background:rgba(255,244,236,.92);
+  backdrop-filter:blur(10px);
+  border-bottom:1px solid var(--line);
+}
+.topbar .wrap{display:flex;align-items:center;gap:12px;height:58px}
+.brand{display:flex;align-items:center;gap:9px;margin-right:auto;min-width:0}
+.mark{width:22px;height:22px;border-radius:6px;background:linear-gradient(135deg,var(--flame),var(--grape));flex:none}
+.brand b{font-family:"Bricolage Grotesque",sans-serif;font-size:16px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.conn{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ink-2);flex:none}
+.dot.ok{background:var(--mint)} .dot.warn{background:var(--amber)} .dot.bad{background:var(--rose)}
+
+.btn{
+  border:1px solid var(--line);background:var(--card);color:var(--ink);
+  padding:7px 13px;border-radius:9px;font-weight:600;font-size:14px;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.btn:hover{border-color:var(--grape)}
+.btn.primary{background:var(--flame);border-color:var(--flame);color:#fff}
+.btn.primary:hover{background:#F4591F;border-color:#F4591F}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink-2);padding:7px 9px}
+.btn.ghost:hover{background:var(--line-2);color:var(--ink)}
+.btn.sm{padding:4px 9px;font-size:13px;border-radius:7px}
+.btn[disabled]{opacity:.45;cursor:not-allowed}
+.btn.danger{color:var(--rose);border-color:var(--line)}
+.btn.danger:hover{background:#FDEEF2;border-color:var(--rose)}
+
+/* ---------- Hero: the progress rails ---------- */
+.hero{padding:38px 0 30px}
+.hero h1{font-size:clamp(28px,4.4vw,40px);line-height:1.08;max-width:16ch}
+.tally{display:flex;flex-wrap:wrap;gap:22px;margin-top:14px}
+.tally div{display:flex;align-items:baseline;gap:6px;font-size:14px;color:var(--ink-2)}
+.tally b{font-family:"Bricolage Grotesque",sans-serif;font-size:20px;color:var(--ink);font-variant-numeric:tabular-nums}
+
+.rails{margin-top:26px;display:flex;flex-direction:column;gap:3px}
+.rail{
+  display:grid;grid-template-columns:minmax(0,15rem) 1fr 3.4rem;
+  align-items:center;gap:16px;padding:7px 0;border:0;background:none;
+  text-align:left;width:100%;color:inherit;border-radius:8px;
+}
+.rail:hover .rail-name{color:var(--flame)}
+.rail-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.track{height:12px;border-radius:99px;background:var(--line-2);overflow:hidden;position:relative}
+.fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--grape),var(--flame));transition:width .45s cubic-bezier(.2,.8,.3,1)}
+.fill.done{background:var(--mint)}
+.fill.hold{background:var(--line);background-image:repeating-linear-gradient(45deg,#EADCE3 0 6px,#F4EAEF 6px 12px)}
+.rail-pct{font-family:"Bricolage Grotesque",sans-serif;font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
+.rails-empty{color:var(--ink-2);font-size:14px;padding:10px 0}
+
+/* ---------- Controls ---------- */
+.controls{
+  display:flex;flex-wrap:wrap;gap:10px;align-items:center;
+  padding:16px 0;border-top:1px solid var(--line);
+  position:sticky;top:58px;background:var(--paper);z-index:30;
+}
+.search{
+  flex:1 1 200px;min-width:160px;max-width:300px;
+  border:1px solid var(--line);background:var(--card);
+  border-radius:9px;padding:8px 12px;
+}
+.search::placeholder{color:#B4A3BE}
+.chips{display:flex;gap:4px;background:var(--line-2);padding:3px;border-radius:10px}
+.chip{border:0;background:none;padding:6px 12px;border-radius:7px;font-size:13.5px;font-weight:600;color:var(--ink-2)}
+.chip[aria-pressed="true"]{background:var(--card);color:var(--ink);box-shadow:0 1px 2px rgba(74,42,20,.09)}
+select.mini{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:8px 10px;font-size:13.5px}
+
+/* ---------- Project cards ---------- */
+main{padding-bottom:70px}
+.cards{display:flex;flex-direction:column;gap:12px;margin-top:6px}
+.card{
+  background:var(--card);border:1px solid var(--line);border-left:4px solid var(--grape);
+  border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;
+}
+.card.s-done{border-left-color:var(--mint)}
+.card.s-hold{border-left-color:var(--amber)}
+.card.s-late{border-left-color:var(--rose)}
+.card.s-done .chead h3{color:var(--ink-2)}
+
+.chead{display:flex;align-items:flex-start;gap:14px;padding:16px 18px;width:100%;border:0;background:none;text-align:left;color:inherit}
+.chead:hover h3{color:var(--flame)}
+.chead h3{font-size:17px;line-height:1.25}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.tag{
+  font-size:12px;font-weight:600;color:var(--ink-2);
+  background:var(--line-2);border-radius:6px;padding:3px 8px;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.tag.late{background:#FDECF0;color:#C22B50}
+.tag.who{background:#F3EAF8;color:var(--grape)}
+.tag.done{background:#E6F6F0;color:#0D7A57}
+.tag.hold{background:#FDF1DC;color:#9A6206}
+
+.cfig{display:flex;flex-direction:column;align-items:flex-end;gap:7px;flex:none;margin-left:auto}
+.cpct{font-family:"Bricolage Grotesque",sans-serif;font-size:27px;line-height:1;font-variant-numeric:tabular-nums}
+.cbar{width:108px}
+.caret{transition:transform .2s;color:var(--ink-2);font-size:12px}
+.card.open .caret{transform:rotate(90deg)}
+
+.cbody{border-top:1px solid var(--line-2);padding:4px 18px 16px}
+.card:not(.open) .cbody{display:none}
+.notes{font-size:14px;color:var(--ink-2);padding:12px 0 4px;max-width:70ch}
+
+/* Subproject rows */
+.sub{display:grid;grid-template-columns:1fr 132px auto;gap:14px;align-items:center;padding:11px 0;border-bottom:1px solid var(--line-2)}
+.sub:last-of-type{border-bottom:0}
+.sub-main{min-width:0}
+.sub-name{font-weight:600;font-size:14.5px}
+.sub-name.done{color:var(--ink-2);text-decoration:line-through;text-decoration-color:var(--line)}
+.sub-fig{display:flex;align-items:center;gap:9px}
+.sub-pct{font-family:"Bricolage Grotesque",sans-serif;font-size:13px;width:2.6rem;text-align:right;font-variant-numeric:tabular-nums}
+.sub-acts{display:flex;gap:2px;opacity:.5}
+.sub:hover .sub-acts,.sub:focus-within .sub-acts{opacity:1}
+.addrow{margin-top:12px;display:flex;gap:8px;flex-wrap:wrap}
+
+.empty{
+  text-align:center;padding:64px 24px;border:2px dashed var(--line);
+  border-radius:var(--radius);color:var(--ink-2);
+}
+.empty h3{font-size:20px;color:var(--ink);margin-bottom:6px}
+.empty p{margin:0 auto 18px;max-width:42ch}
+
+/* ---------- Modal ---------- */
+dialog{
+  border:0;padding:0;border-radius:18px;background:var(--card);color:var(--ink);
+  width:min(540px,calc(100vw - 32px));box-shadow:0 24px 60px -18px rgba(46,31,61,.4);
+}
+dialog::backdrop{background:rgba(46,31,61,.35);backdrop-filter:blur(2px)}
+.dlg-h{display:flex;align-items:center;gap:12px;padding:20px 22px 0}
+.dlg-h h2{font-size:19px;margin-right:auto}
+.dlg-b{padding:16px 22px;max-height:66vh;overflow:auto}
+.dlg-f{display:flex;gap:8px;padding:14px 22px 20px;border-top:1px solid var(--line-2);flex-wrap:wrap}
+.dlg-f .spacer{margin-left:auto}
+
+.field{margin-bottom:14px}
+.field label{display:block;font-size:13px;font-weight:600;color:var(--ink-2);margin-bottom:5px}
+.field input[type=text],.field input[type=date],.field input[type=number],.field select,.field textarea{
+  width:100%;border:1px solid var(--line);border-radius:9px;padding:9px 11px;background:#FFFDFB;
+}
+.field textarea{min-height:76px;resize:vertical;line-height:1.5}
+.field .hint{font-size:12.5px;color:var(--ink-2);margin-top:5px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+
+.slider{display:flex;align-items:center;gap:12px}
+.slider input[type=range]{flex:1;accent-color:var(--flame)}
+.slider input[type=number]{width:74px}
+
+pre.summary{
+  white-space:pre-wrap;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
+  font-size:12.5px;line-height:1.6;background:#FFFAF6;border:1px solid var(--line);
+  border-radius:10px;padding:14px;margin:0;max-height:42vh;overflow:auto;
+}
+
+.toast{
+  position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(120%);
+  background:var(--ink);color:#FFF6EF;padding:11px 18px;border-radius:11px;
+  font-size:14px;font-weight:500;z-index:90;transition:transform .3s cubic-bezier(.2,.9,.3,1);
+  box-shadow:0 12px 28px -10px rgba(46,31,61,.5);max-width:calc(100vw - 32px);
+}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+@media (max-width:640px){
+  .rail{grid-template-columns:1fr 3rem;gap:8px 12px}
+  .rail .track{grid-column:1/-1;order:3}
+  .controls{position:static}
+  .chead{flex-wrap:wrap}
+  .cfig{flex-direction:row;align-items:center;width:100%;margin-left:0}
+  .cbar{flex:1}
+  .sub{grid-template-columns:1fr auto;gap:8px}
+  .sub-fig{grid-column:1/-1}
+  .sub-fig .track{flex:1}
+  .row2{grid-template-columns:1fr}
+}
+@media (prefers-reduced-motion:reduce){
+  *{transition:none!important;animation:none!important}
+}
+@media print{
+  .topbar,.controls,.sub-acts,.addrow,.btn{display:none!important}
+  .card{break-inside:avoid;box-shadow:none}
+  .cbody{display:block!important}
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap">
+    <div class="brand"><span class="mark"></span><b id="appTitle">Project Tracker</b></div>
+    <span class="conn"><span class="dot" id="connDot"></span><span id="connText">Starting</span></span>
+    <button class="btn ghost" id="btnSummary">Weekly summary</button>
+    <button class="btn" id="btnLock">Unlock editing</button>
+    <button class="btn ghost" id="btnSettings" aria-label="Settings">&#9881;</button>
+  </div>
+</header>
+
+<div class="wrap">
+  <section class="hero">
+    <h1 id="heroTitle">Where everything stands</h1>
+    <div class="tally" id="tally"></div>
+    <div class="rails" id="rails"></div>
+  </section>
+
+  <div class="controls">
+    <input class="search" id="q" type="search" placeholder="Search projects and tasks">
+    <div class="chips" id="statusChips">
+      <button class="chip" data-f="open" aria-pressed="true">In flight</button>
+      <button class="chip" data-f="all" aria-pressed="false">All</button>
+      <button class="chip" data-f="done" aria-pressed="false">Complete</button>
+    </div>
+    <select class="mini" id="ownerFilter"><option value="">Everyone</option></select>
+    <select class="mini" id="sortBy">
+      <option value="due">Soonest due</option>
+      <option value="progress">Least complete</option>
+      <option value="name">Name</option>
+    </select>
+    <button class="btn primary" id="btnNew" style="margin-left:auto">New project</button>
+  </div>
+</div>
+
+<main class="wrap"><div class="cards" id="cards"></div></main>
+
+<!-- Project add/edit -->
+<dialog id="dlgProject"><form method="dialog" id="formProject">
+  <div class="dlg-h"><h2 id="pTitle">New project</h2></div>
+  <div class="dlg-b">
+    <div class="field"><label for="pName">Project name</label>
+      <input type="text" id="pName" required maxlength="120" placeholder="Ontario BLUNT rollout"></div>
+    <div class="row2">
+      <div class="field"><label for="pOwner">Owner</label><select id="pOwner"></select></div>
+      <div class="field"><label for="pDue">Target date</label><input type="date" id="pDue"></div>
+    </div>
+    <div class="field"><label for="pStatus">Status</label>
+      <select id="pStatus">
+        <option value="active">Active</option>
+        <option value="hold">On hold</option>
+        <option value="done">Complete</option>
+      </select></div>
+    <div class="field" id="pProgWrap"><label for="pProgNum">Progress</label>
+      <div class="slider">
+        <input type="range" id="pProg" min="0" max="100" step="5" value="0">
+        <input type="number" id="pProgNum" min="0" max="100" step="1" value="0">
+      </div>
+      <p class="hint">Used only until you add tasks. Once a project has tasks, its percentage is calculated from them.</p>
+    </div>
+    <div class="field"><label for="pNotes">Notes</label>
+      <textarea id="pNotes" maxlength="1000" placeholder="Scope, blockers, anything the weekly summary should carry."></textarea></div>
+  </div>
+  <div class="dlg-f">
+    <button type="button" class="btn danger" id="pDelete">Delete project</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn" data-close>Cancel</button>
+    <button type="submit" class="btn primary">Save project</button>
+  </div>
+</form></dialog>
+
+<!-- Task add/edit -->
+<dialog id="dlgSub"><form method="dialog" id="formSub">
+  <div class="dlg-h"><h2 id="sTitle">New task</h2></div>
+  <div class="dlg-b">
+    <div class="field"><label for="sName">Task name</label>
+      <input type="text" id="sName" required maxlength="120" placeholder="Train the trainers session"></div>
+    <div class="row2">
+      <div class="field"><label for="sOwner">Assigned to</label><select id="sOwner"></select></div>
+      <div class="field"><label for="sDue">Target date</label><input type="date" id="sDue"></div>
+    </div>
+    <div class="field"><label for="sProgNum">Progress</label>
+      <div class="slider">
+        <input type="range" id="sProg" min="0" max="100" step="5" value="0">
+        <input type="number" id="sProgNum" min="0" max="100" step="1" value="0">
+      </div></div>
+    <div class="row2">
+      <div class="field"><label for="sWeight">Weight</label>
+        <input type="number" id="sWeight" min="0.1" max="10" step="0.5" value="1">
+        <p class="hint">How much of the project this task represents. Leave at 1 if all tasks count equally.</p></div>
+      <div class="field"><label for="sStatus">Status</label>
+        <select id="sStatus">
+          <option value="active">Active</option>
+          <option value="hold">On hold</option>
+          <option value="done">Complete</option>
+        </select></div>
+    </div>
+    <div class="field"><label for="sNotes">Notes</label>
+      <textarea id="sNotes" maxlength="600"></textarea></div>
+  </div>
+  <div class="dlg-f">
+    <button type="button" class="btn danger" id="sDelete">Delete task</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn" data-close>Cancel</button>
+    <button type="submit" class="btn primary">Save task</button>
+  </div>
+</form></dialog>
+
+<!-- Weekly summary -->
+<dialog id="dlgSummary">
+  <div class="dlg-h"><h2>Weekly summary</h2></div>
+  <div class="dlg-b">
+    <p class="hint" style="margin:0 0 12px">The emailed version arrives formatted, with progress bars and colour. Below is the plain-text copy, handy for pasting into Slack or a message.</p>
+    <pre class="summary" id="sumText"></pre>
+  </div>
+  <div class="dlg-f">
+    <button type="button" class="btn" id="sumCopy">Copy</button>
+    <span class="spacer"></span>
+    <button type="button" class="btn" data-close>Close</button>
+    <button type="button" class="btn primary" id="sumSend">Send it to me now</button>
+  </div>
+</dialog>
+
+<!-- Settings -->
+<dialog id="dlgSettings"><form method="dialog" id="formSettings">
+  <div class="dlg-h"><h2>Settings</h2></div>
+  <div class="dlg-b">
+    <div class="field"><label for="setTeam">People you can assign work to</label>
+      <textarea id="setTeam" placeholder="One name per line"></textarea>
+      <p class="hint">One name per line. These fill the owner dropdowns.</p></div>
+    <div class="field"><label for="setRecips">Weekly summary goes to</label>
+      <textarea id="setRecips" placeholder="One email per line"></textarea>
+      <p class="hint">One email address per line. Start with just yours while you're testing.</p></div>
+    <div class="field"><label for="setTitle">Dashboard name</label>
+      <input type="text" id="setTitle" maxlength="60"></div>
+    <div class="field">
+      <label>Your data</label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button type="button" class="btn sm" id="setExport">Download a backup</button>
+        <button type="button" class="btn sm" id="setImport">Restore from backup</button>
+      </div>
+      <p class="hint" id="setSource"></p>
+    </div>
+  </div>
+  <div class="dlg-f">
+    <span class="spacer"></span>
+    <button type="button" class="btn" data-close>Cancel</button>
+    <button type="submit" class="btn primary">Save settings</button>
+  </div>
+</form></dialog>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileIn" accept="application/json" hidden>
+
+<script>
+/* ==========================================================
+   CONFIG — the only block most changes need
+   ========================================================== */
+const CONFIG = {
+  // Paste the Apps Script Web App URL here (ends in /exec).
+  // Leave empty to run in local demo mode, saved to this browser only.
+  API_URL: "https://script.google.com/macros/s/AKfycbybuXlljK1W03rHhSuvzmRFIqSGCaCbdhCLYjpMmpIAzgnVCK6HHo-5bbJ-kzgzAa47/exec",
+
+  APP_TITLE: "Project Tracker",
+
+  // Used only in demo mode, or the first time the Sheet is empty.
+  DEFAULT_TEAM: ["Gav"],
+
+  // Re-check the Sheet for other people's changes, in seconds. 0 turns it off.
+  REFRESH_SECONDS: 120,
+};
+
+/* ==========================================================
+   State
+   ========================================================== */
+const LS = { data: "ptrack.data.v1", key: "ptrack.editkey.v1", open: "ptrack.open.v1" };
+
+let data = { rev: 0, title: "", team: [], recipients: [], projects: [] };
+let editKey = null;                 // null = view mode
+let filter = { q: "", status: "open", owner: "", sort: "due" };
+let openCards = new Set();
+let saving = false;
+let refreshTimer = null;
+
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const live = () => !!CONFIG.API_URL;
+const canEdit = () => !live() || !!editKey;
+
+function uid(p) { return p + Math.random().toString(36).slice(2, 9) + Date.now().toString(36).slice(-4); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;" }[c])); }
+function clamp(n, lo, hi) { n = Number(n); return isNaN(n) ? lo : Math.min(hi, Math.max(lo, n)); }
+function today() { return new Date().toISOString().slice(0, 10); }
+
+function toast(msg) {
+  const t = $("#toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._t); t._t = setTimeout(() => t.classList.remove("show"), 3200);
+}
+function conn(cls, text) {
+  $("#connDot").className = "dot " + cls;
+  $("#connText").textContent = text;
+}
+
+/* ==========================================================
+   Progress maths
+   A project with tasks is the weighted average of those tasks.
+   A project without tasks uses its own manual percentage.
+   Tasks marked complete count as 100 regardless of the slider.
+   ========================================================== */
+function subPct(s) { return s.status === "done" ? 100 : clamp(s.progress, 0, 100); }
+
+function projectPct(p) {
+  if (p.status === "done") return 100;
+  const subs = p.subs || [];
+  if (!subs.length) return clamp(p.progress, 0, 100);
+  let num = 0, den = 0;
+  for (const s of subs) {
+    const w = clamp(s.weight, 0.1, 10);
+    num += subPct(s) * w; den += w;
+  }
+  return den ? Math.round(num / den) : 0;
+}
+function isLate(x) { return x.due && x.status !== "done" && x.due < today(); }
+function fmtDate(d) {
+  if (!d) return "";
+  const dt = new Date(d + "T12:00:00");
+  return dt.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+function statusClass(p) {
+  if (p.status === "done") return "s-done";
+  if (p.status === "hold") return "s-hold";
+  if (isLate(p) || (p.subs || []).some(isLate)) return "s-late";
+  return "";
+}
+
+/* ==========================================================
+   Loading and saving
+   ========================================================== */
+async function api(action, payload) {
+  const url = CONFIG.API_URL + "?action=" + encodeURIComponent(action);
+  const opts = { method: "GET", redirect: "follow" };
+  if (payload) {
+    opts.method = "POST";
+    // text/plain keeps this a "simple request" so the browser skips the
+    // CORS preflight that Apps Script cannot answer. Do not change it.
+    opts.headers = { "Content-Type": "text/plain;charset=utf-8" };
+    opts.body = JSON.stringify(Object.assign({ action, key: editKey }, payload));
+  }
+  const res = await fetch(url, opts);
+  if (!res.ok) throw new Error("Server returned " + res.status);
+  const json = await res.json();
+  if (json.error) throw new Error(json.error);
+  return json;
+}
+
+function normalise(d) {
+  d = d || {};
+  return {
+    rev: Number(d.rev) || 0,
+    title: d.title || CONFIG.APP_TITLE,
+    team: Array.isArray(d.team) && d.team.length ? d.team : CONFIG.DEFAULT_TEAM.slice(),
+    recipients: Array.isArray(d.recipients) ? d.recipients : [],
+    projects: (d.projects || []).map(p => ({
+      id: p.id || uid("p_"),
+      name: p.name || "Untitled project",
+      owner: p.owner || "",
+      status: ["active","hold","done"].includes(p.status) ? p.status : "active",
+      due: p.due || "",
+      notes: p.notes || "",
+      progress: clamp(p.progress, 0, 100),
+      subs: (p.subs || []).map(s => ({
+        id: s.id || uid("s_"),
+        name: s.name || "Untitled task",
+        owner: s.owner || "",
+        status: ["active","hold","done"].includes(s.status) ? s.status : "active",
+        due: s.due || "",
+        notes: s.notes || "",
+        progress: clamp(s.progress, 0, 100),
+        weight: clamp(s.weight, 0.1, 10) || 1,
+      })),
+    })),
+  };
+}
+
+async function load({ quiet } = {}) {
+  if (!live()) {
+    try {
+      const raw = localStorage.getItem(LS.data);
+      data = normalise(raw ? JSON.parse(raw) : seed());
+    } catch { data = normalise(seed()); }
+    conn("warn", "Demo mode, this browser only");
+    render(); return;
+  }
+  try {
+    if (!quiet) conn("", "Loading");
+    const res = await api("load");
+    // Someone else's change while you have unsaved edits open would be lost.
+    data = normalise(res.data);
+    conn("ok", "Connected");
+    render();
+  } catch (e) {
+    conn("bad", "Can't reach the Sheet");
+    if (!quiet) toast("Couldn't load: " + e.message);
+  }
+}
+
+async function save() {
+  if (!canEdit()) { toast("Unlock editing first"); return false; }
+  if (!live()) {
+    try { localStorage.setItem(LS.data, JSON.stringify(data)); } catch {}
+    render(); return true;
+  }
+  if (saving) return false;
+  saving = true; conn("", "Saving");
+  try {
+    const res = await api("save", { rev: data.rev, data });
+    data.rev = res.rev;
+    conn("ok", "Saved");
+    render(); return true;
+  } catch (e) {
+    conn("bad", "Not saved");
+    if (/rev|conflict/i.test(e.message)) {
+      toast("Someone else saved first. Reloading their version.");
+      await load({ quiet: true });
+    } else {
+      toast("Couldn't save: " + e.message);
+    }
+    return false;
+  } finally { saving = false; }
+}
+
+function seed() {
+  return {
+    rev: 0, title: CONFIG.APP_TITLE, team: CONFIG.DEFAULT_TEAM.slice(), recipients: [],
+    projects: [{
+      id: uid("p_"), name: "Sample project, delete me", owner: CONFIG.DEFAULT_TEAM[0] || "",
+      status: "active", due: "", notes: "Open this to see how tasks roll up into a percentage.",
+      progress: 0,
+      subs: [
+        { id: uid("s_"), name: "A task that's finished", owner: "", status: "done", due: "", notes: "", progress: 100, weight: 1 },
+        { id: uid("s_"), name: "A task that's underway", owner: "", status: "active", due: "", notes: "", progress: 40, weight: 1 },
+        { id: uid("s_"), name: "A task that counts double", owner: "", status: "active", due: "", notes: "", progress: 0, weight: 2 },
+      ],
+    }],
+  };
+}
+
+/* ==========================================================
+   Render
+   ========================================================== */
+function visibleProjects() {
+  const q = filter.q.trim().toLowerCase();
+  let list = data.projects.filter(p => {
+    if (filter.status === "open" && p.status === "done") return false;
+    if (filter.status === "done" && p.status !== "done") return false;
+    if (filter.owner && p.owner !== filter.owner && !(p.subs || []).some(s => s.owner === filter.owner)) return false;
+    if (q) {
+      const hay = (p.name + " " + p.owner + " " + p.notes + " " +
+        (p.subs || []).map(s => s.name + " " + s.owner).join(" ")).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+  const s = filter.sort;
+  list.sort((a, b) => {
+    if (s === "name") return a.name.localeCompare(b.name);
+    if (s === "progress") return projectPct(a) - projectPct(b);
+    const ad = a.due || "9999-12-31", bd = b.due || "9999-12-31";
+    return ad === bd ? a.name.localeCompare(b.name) : ad.localeCompare(bd);
+  });
+  return list;
+}
+
+function render() {
+  $("#appTitle").textContent = data.title || CONFIG.APP_TITLE;
+  document.title = data.title || CONFIG.APP_TITLE;
+  $("#btnLock").textContent = canEdit() ? "Editing on" : "Unlock editing";
+  $("#btnLock").classList.toggle("primary", canEdit() && live());
+  $("#btnLock").hidden = !live();
+  $("#btnNew").disabled = !canEdit();
+
+  // Owner filter, preserving the current pick
+  const owners = [...new Set(data.team.concat(
+    data.projects.flatMap(p => [p.owner].concat((p.subs || []).map(s => s.owner)))
+  ).filter(Boolean))].sort();
+  const of = $("#ownerFilter");
+  of.innerHTML = '<option value="">Everyone</option>' +
+    owners.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  of.value = filter.owner;
+
+  const open = data.projects.filter(p => p.status !== "done");
+  const late = data.projects.filter(p => isLate(p) || (p.subs || []).some(isLate));
+  const avg = open.length ? Math.round(open.reduce((a, p) => a + projectPct(p), 0) / open.length) : 0;
+
+  $("#tally").innerHTML = [
+    `<div><b class="num">${open.length}</b> in flight</div>`,
+    `<div><b class="num">${avg}%</b> average completion</div>`,
+    `<div><b class="num">${late.length}</b> past target</div>`,
+    `<div><b class="num">${data.projects.length - open.length}</b> complete</div>`,
+  ].join("");
+
+  // Hero rails
+  const rails = open.slice().sort((a, b) => projectPct(b) - projectPct(a));
+  $("#rails").innerHTML = rails.length ? rails.map(p => {
+    const pct = projectPct(p);
+    const f = p.status === "hold" ? "hold" : (pct === 100 ? "done" : "");
+    return `<button class="rail" data-jump="${esc(p.id)}">
+      <span class="rail-name">${esc(p.name)}</span>
+      <span class="track"><span class="fill ${f}" style="width:${pct}%"></span></span>
+      <span class="rail-pct">${pct}%</span>
+    </button>`;
+  }).join("") : `<p class="rails-empty">Nothing in flight. Add a project to start tracking.</p>`;
+
+  // Cards
+  const list = visibleProjects();
+  const cards = $("#cards");
+  if (!list.length) {
+    cards.innerHTML = `<div class="empty">
+      <h3>${data.projects.length ? "Nothing matches those filters" : "No projects yet"}</h3>
+      <p>${data.projects.length
+        ? "Try clearing the search or switching back to All."
+        : "Add your first project, then break it into tasks. The percentage looks after itself."}</p>
+      ${canEdit() ? '<button class="btn primary" data-new>New project</button>' : ""}
+    </div>`;
+    return;
+  }
+
+  cards.innerHTML = list.map(p => {
+    const pct = projectPct(p), subs = p.subs || [];
+    const fillCls = p.status === "hold" ? "hold" : (pct === 100 ? "done" : "");
+    const tags = [
+      p.owner ? `<span class="tag who">${esc(p.owner)}</span>` : "",
+      p.due ? `<span class="tag ${isLate(p) ? "late" : ""}">${isLate(p) ? "Was due " : "Due "}${fmtDate(p.due)}</span>` : "",
+      p.status === "done" ? `<span class="tag done">Complete</span>` : "",
+      p.status === "hold" ? `<span class="tag hold">On hold</span>` : "",
+      subs.length ? `<span class="tag">${subs.filter(s => subPct(s) === 100).length} of ${subs.length} tasks done</span>` : `<span class="tag">No tasks yet</span>`,
+    ].join("");
+
+    const rows = subs.map(s => {
+      const sp = subPct(s);
+      return `<div class="sub">
+        <div class="sub-main">
+          <div class="sub-name ${sp === 100 ? "done" : ""}">${esc(s.name)}</div>
+          <div class="meta">
+            ${s.owner ? `<span class="tag who">${esc(s.owner)}</span>` : ""}
+            ${s.due ? `<span class="tag ${isLate(s) ? "late" : ""}">${fmtDate(s.due)}</span>` : ""}
+            ${s.status === "hold" ? `<span class="tag hold">On hold</span>` : ""}
+            ${clamp(s.weight,0.1,10) !== 1 ? `<span class="tag">Weight ${clamp(s.weight,0.1,10)}</span>` : ""}
+          </div>
+        </div>
+        <div class="sub-fig">
+          <span class="track" style="flex:1"><span class="fill ${sp === 100 ? "done" : ""}" style="width:${sp}%"></span></span>
+          <span class="sub-pct">${sp}%</span>
+        </div>
+        <div class="sub-acts">
+          <button class="btn ghost sm" data-editsub="${esc(p.id)}|${esc(s.id)}" ${canEdit() ? "" : "disabled"}>Edit</button>
+        </div>
+      </div>`;
+    }).join("");
+
+    return `<article class="card ${statusClass(p)} ${openCards.has(p.id) ? "open" : ""}" id="card-${esc(p.id)}">
+      <button class="chead" data-toggle="${esc(p.id)}" aria-expanded="${openCards.has(p.id)}">
+        <span class="caret">&#9654;</span>
+        <span style="min-width:0;flex:1">
+          <h3>${esc(p.name)}</h3>
+          <span class="meta">${tags}</span>
+        </span>
+        <span class="cfig">
+          <span class="cpct">${pct}%</span>
+          <span class="track cbar"><span class="fill ${fillCls}" style="width:${pct}%"></span></span>
+        </span>
+      </button>
+      <div class="cbody">
+        ${p.notes ? `<p class="notes">${esc(p.notes)}</p>` : ""}
+        ${rows || `<p class="notes">No tasks yet. This project is tracking on its own percentage.</p>`}
+        <div class="addrow">
+          <button class="btn sm" data-addsub="${esc(p.id)}" ${canEdit() ? "" : "disabled"}>Add task</button>
+          <button class="btn sm" data-editproj="${esc(p.id)}" ${canEdit() ? "" : "disabled"}>Edit project</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+/* ==========================================================
+   Weekly summary
+   ========================================================== */
+function buildSummary() {
+  const open = data.projects.filter(p => p.status !== "done");
+  const late = data.projects.filter(p => isLate(p) || (p.subs || []).some(isLate));
+  const avg = open.length ? Math.round(open.reduce((a, p) => a + projectPct(p), 0) / open.length) : 0;
+  const dateStr = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric", year: "numeric" });
+
+  const L = [];
+  L.push((data.title || CONFIG.APP_TITLE).toUpperCase());
+  L.push(dateStr);
+  L.push("");
+  L.push(`${open.length} projects in flight, ${avg}% average completion, ${late.length} past target.`);
+  L.push("");
+
+  for (const p of open.slice().sort((a, b) => projectPct(b) - projectPct(a))) {
+    const pct = projectPct(p);
+    const bar = "#".repeat(Math.round(pct / 5)).padEnd(20, ".");
+    L.push(`${bar} ${String(pct).padStart(3)}%  ${p.name}`);
+    const bits = [];
+    if (p.owner) bits.push("Owner: " + p.owner);
+    if (p.due) bits.push((isLate(p) ? "PAST TARGET " : "Target ") + fmtDate(p.due));
+    if (p.status === "hold") bits.push("ON HOLD");
+    if (bits.length) L.push("    " + bits.join("   "));
+    for (const s of (p.subs || [])) {
+      const flag = isLate(s) ? " (past target)" : "";
+      L.push(`    ${String(subPct(s)).padStart(3)}%  ${s.name}${s.owner ? "  [" + s.owner + "]" : ""}${flag}`);
+    }
+    if (p.notes) L.push("    Note: " + p.notes);
+    L.push("");
+  }
+
+  const done = data.projects.filter(p => p.status === "done");
+  if (done.length) {
+    L.push("Completed and still on the board:");
+    done.forEach(p => L.push("    " + p.name + (p.owner ? "  [" + p.owner + "]" : "")));
+  }
+  return L.join("\n");
+}
+
+async function sendSummary() {
+  const text = buildSummary();
+  if (!live()) {
+    // No server in demo mode, so hand it to the mail client instead.
+    const to = (data.recipients[0] || "");
+    const url = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent("Project summary")}&body=${encodeURIComponent(text.slice(0, 1800))}`;
+    location.href = url;
+    toast("Opened your mail app. Connect the Sheet for real sending.");
+    return;
+  }
+  if (!data.recipients.length) { toast("Add an email address in Settings first"); return; }
+  try {
+    $("#sumSend").disabled = true;
+    // No content sent. Apps Script builds the styled email from the Sheet,
+    // so this test send and the Monday send are the same thing.
+    await api("email", { now: true });
+    toast("Sent to " + data.recipients.join(", "));
+  } catch (e) {
+    toast("Couldn't send: " + e.message);
+  } finally { $("#sumSend").disabled = false; }
+}
+
+/* ==========================================================
+   Dialogs
+   ========================================================== */
+function fillOwners(sel, val) {
+  sel.innerHTML = '<option value="">Unassigned</option>' +
+    data.team.map(o => `<option value="${esc(o)}">${esc(o)}</option>`).join("");
+  sel.value = val || "";
+}
+function linkSlider(range, number) {
+  range.oninput = () => number.value = range.value;
+  number.oninput = () => range.value = clamp(number.value, 0, 100);
+}
+linkSlider($("#pProg"), $("#pProgNum"));
+linkSlider($("#sProg"), $("#sProgNum"));
+
+let editingProject = null, editingSub = null;
+
+function openProject(id) {
+  const p = id ? data.projects.find(x => x.id === id) : null;
+  editingProject = p ? p.id : null;
+  $("#pTitle").textContent = p ? "Edit project" : "New project";
+  $("#pName").value = p ? p.name : "";
+  fillOwners($("#pOwner"), p ? p.owner : (data.team[0] || ""));
+  $("#pDue").value = p ? p.due : "";
+  $("#pStatus").value = p ? p.status : "active";
+  $("#pNotes").value = p ? p.notes : "";
+  const hasSubs = p && (p.subs || []).length;
+  $("#pProgWrap").hidden = !!hasSubs;
+  $("#pProg").value = $("#pProgNum").value = p ? clamp(p.progress, 0, 100) : 0;
+  $("#pDelete").hidden = !p;
+  $("#dlgProject").showModal();
+  $("#pName").focus();
+}
+
+function openSub(projectId, subId) {
+  const p = data.projects.find(x => x.id === projectId);
+  if (!p) return;
+  const s = subId ? (p.subs || []).find(x => x.id === subId) : null;
+  editingSub = { projectId, subId: s ? s.id : null };
+  $("#sTitle").textContent = s ? "Edit task" : "New task";
+  $("#sName").value = s ? s.name : "";
+  fillOwners($("#sOwner"), s ? s.owner : "");
+  $("#sDue").value = s ? s.due : "";
+  $("#sProg").value = $("#sProgNum").value = s ? clamp(s.progress, 0, 100) : 0;
+  $("#sWeight").value = s ? clamp(s.weight, 0.1, 10) : 1;
+  $("#sStatus").value = s ? s.status : "active";
+  $("#sNotes").value = s ? s.notes : "";
+  $("#sDelete").hidden = !s;
+  $("#dlgSub").showModal();
+  $("#sName").focus();
+}
+
+$("#formProject").addEventListener("submit", async e => {
+  const name = $("#pName").value.trim();
+  if (!name) { e.preventDefault(); return; }
+  const patch = {
+    name, owner: $("#pOwner").value, due: $("#pDue").value,
+    status: $("#pStatus").value, notes: $("#pNotes").value.trim(),
+    progress: clamp($("#pProgNum").value, 0, 100),
+  };
+  if (editingProject) {
+    Object.assign(data.projects.find(x => x.id === editingProject), patch);
+  } else {
+    const p = Object.assign({ id: uid("p_"), subs: [] }, patch);
+    data.projects.push(p); openCards.add(p.id);
+  }
+  await save();
+});
+
+$("#formSub").addEventListener("submit", async e => {
+  const name = $("#sName").value.trim();
+  if (!name || !editingSub) { e.preventDefault(); return; }
+  const p = data.projects.find(x => x.id === editingSub.projectId);
+  if (!p) return;
+  p.subs = p.subs || [];
+  const patch = {
+    name, owner: $("#sOwner").value, due: $("#sDue").value,
+    progress: clamp($("#sProgNum").value, 0, 100),
+    weight: clamp($("#sWeight").value, 0.1, 10) || 1,
+    status: $("#sStatus").value, notes: $("#sNotes").value.trim(),
+  };
+  if (editingSub.subId) Object.assign(p.subs.find(x => x.id === editingSub.subId), patch);
+  else p.subs.push(Object.assign({ id: uid("s_") }, patch));
+  openCards.add(p.id);
+  await save();
+});
+
+$("#pDelete").addEventListener("click", async () => {
+  const p = data.projects.find(x => x.id === editingProject);
+  if (!p) return;
+  if (!confirm(`Delete "${p.name}" and its ${(p.subs || []).length} tasks? This can't be undone.`)) return;
+  data.projects = data.projects.filter(x => x.id !== editingProject);
+  $("#dlgProject").close();
+  await save(); toast("Project deleted");
+});
+
+$("#sDelete").addEventListener("click", async () => {
+  if (!editingSub) return;
+  const p = data.projects.find(x => x.id === editingSub.projectId);
+  const s = p && (p.subs || []).find(x => x.id === editingSub.subId);
+  if (!s) return;
+  if (!confirm(`Delete task "${s.name}"?`)) return;
+  p.subs = p.subs.filter(x => x.id !== editingSub.subId);
+  $("#dlgSub").close();
+  await save(); toast("Task deleted");
+});
+
+/* ---- Settings ---- */
+$("#btnSettings").addEventListener("click", () => {
+  $("#setTeam").value = data.team.join("\n");
+  $("#setRecips").value = data.recipients.join("\n");
+  $("#setTitle").value = data.title || CONFIG.APP_TITLE;
+  $("#setSource").textContent = live()
+    ? "Connected to your Google Sheet. The Sheet is the source of truth."
+    : "Demo mode. Saved to this browser only. Add your Apps Script URL to CONFIG.API_URL to go live.";
+  $$("#formSettings input, #formSettings textarea").forEach(el => el.disabled = !canEdit());
+  $("#dlgSettings").showModal();
+});
+
+$("#formSettings").addEventListener("submit", async () => {
+  const lines = v => v.split("\n").map(s => s.trim()).filter(Boolean);
+  data.team = lines($("#setTeam").value);
+  data.recipients = lines($("#setRecips").value).filter(e => e.includes("@"));
+  data.title = $("#setTitle").value.trim() || CONFIG.APP_TITLE;
+  if (!data.team.length) data.team = CONFIG.DEFAULT_TEAM.slice();
+  await save(); toast("Settings saved");
+});
+
+$("#setExport").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "project-tracker-" + today() + ".json";
+  a.click(); URL.revokeObjectURL(a.href);
+});
+$("#setImport").addEventListener("click", () => $("#fileIn").click());
+$("#fileIn").addEventListener("change", async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const parsed = JSON.parse(await f.text());
+    if (!confirm("Replace everything currently on the dashboard with this backup?")) return;
+    const rev = data.rev;
+    data = normalise(parsed); data.rev = rev;
+    await save(); toast("Backup restored");
+    $("#dlgSettings").close();
+  } catch { toast("That file isn't a valid backup"); }
+  e.target.value = "";
+});
+
+/* ---- Summary dialog ---- */
+$("#btnSummary").addEventListener("click", () => {
+  $("#sumText").textContent = buildSummary();
+  $("#sumSend").textContent = live() ? "Send it to me now" : "Open in my mail app";
+  $("#dlgSummary").showModal();
+});
+$("#sumSend").addEventListener("click", sendSummary);
+$("#sumCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText(buildSummary()); toast("Summary copied"); }
+  catch { toast("Select the text and copy it manually"); }
+});
+
+/* ---- Edit lock ---- */
+$("#btnLock").addEventListener("click", async () => {
+  if (editKey) {
+    editKey = null;
+    try { localStorage.removeItem(LS.key); } catch {}
+    toast("Back to view only"); render(); return;
+  }
+  const k = prompt("Edit key");
+  if (!k) return;
+  try {
+    await api("check", { key: k });
+    editKey = k;
+    try { localStorage.setItem(LS.key, k); } catch {}
+    toast("Editing unlocked"); render();
+  } catch { toast("That key didn't work"); }
+});
+
+/* ---- Filters ---- */
+$("#q").addEventListener("input", e => { filter.q = e.target.value; render(); });
+$("#ownerFilter").addEventListener("change", e => { filter.owner = e.target.value; render(); });
+$("#sortBy").addEventListener("change", e => { filter.sort = e.target.value; render(); });
+$("#statusChips").addEventListener("click", e => {
+  const b = e.target.closest(".chip"); if (!b) return;
+  filter.status = b.dataset.f;
+  $$("#statusChips .chip").forEach(c => c.setAttribute("aria-pressed", String(c === b)));
+  render();
+});
+$("#btnNew").addEventListener("click", () => openProject(null));
+
+/* ---- Delegated clicks ---- */
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-toggle],[data-jump],[data-addsub],[data-editproj],[data-editsub],[data-new],[data-close]");
+  if (!t) return;
+  if (t.dataset.close !== undefined) { t.closest("dialog").close(); return; }
+  if (t.dataset.new !== undefined) { openProject(null); return; }
+  if (t.dataset.toggle) {
+    const id = t.dataset.toggle;
+    openCards.has(id) ? openCards.delete(id) : openCards.add(id);
+    try { localStorage.setItem(LS.open, JSON.stringify([...openCards])); } catch {}
+    render(); return;
+  }
+  if (t.dataset.jump) {
+    const id = t.dataset.jump;
+    openCards.add(id);
+    if (filter.status === "done") { filter.status = "all"; $$("#statusChips .chip").forEach(c => c.setAttribute("aria-pressed", String(c.dataset.f === "all"))); }
+    render();
+    const el = document.getElementById("card-" + id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    return;
+  }
+  if (t.dataset.addsub) return openSub(t.dataset.addsub, null);
+  if (t.dataset.editproj) return openProject(t.dataset.editproj);
+  if (t.dataset.editsub) {
+    const [pid, sid] = t.dataset.editsub.split("|");
+    return openSub(pid, sid);
+  }
+});
+
+/* ==========================================================
+   Start
+   ========================================================== */
+(async function init() {
+  try { openCards = new Set(JSON.parse(localStorage.getItem(LS.open) || "[]")); } catch {}
+  try { editKey = localStorage.getItem(LS.key) || null; } catch {}
+  await load();
+  if (live() && CONFIG.REFRESH_SECONDS > 0) {
+    refreshTimer = setInterval(() => {
+      if (!saving && !document.querySelector("dialog[open]")) load({ quiet: true });
+    }, CONFIG.REFRESH_SECONDS * 1000);
+  }
+})();
+</script>
+</body>
+</html>
