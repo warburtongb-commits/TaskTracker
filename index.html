@@ -35,18 +35,18 @@
   --ink-2:      #6E5C7C;   /* secondary text */
   --flame:      #FF6B35;   /* primary accent */
   --grape:      #7B3FA0;   /* secondary accent, progress + structure */
- 
+
   /* ---- Status colours ---- */
   --mint:  #17A67A;        /* complete / on track */
   --amber: #E8940B;        /* on hold */
   --rose:  #E8436B;        /* overdue */
- 
+
   /* ---- Derived. Usually leave alone. ---- */
   --line:    #F2DED2;
   --line-2:  #FBEDE4;
   --shadow:  0 1px 2px rgba(74,42,20,.05), 0 8px 24px -12px rgba(74,42,20,.18);
   --radius:  14px;
- 
+
   color-scheme: light;
 }
 
@@ -113,8 +113,10 @@ input,select,textarea{font-family:inherit;font-size:inherit;color:var(--ink)}
 }
 .rail:hover .rail-name{color:var(--flame)}
 .rail-name{font-weight:600;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.track{height:12px;border-radius:99px;background:var(--line-2);overflow:hidden;position:relative}
-.fill{height:100%;border-radius:99px;background:linear-gradient(90deg,var(--grape),var(--flame));transition:width .45s cubic-bezier(.2,.8,.3,1)}
+/* display:block matters on both. These are spans, and an inline
+   element ignores width and height, so the fill would never show. */
+.track{display:block;height:12px;border-radius:99px;background:var(--line-2);overflow:hidden;position:relative}
+.fill{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,var(--grape),var(--flame));transition:width .45s cubic-bezier(.2,.8,.3,1)}
 .fill.done{background:var(--mint)}
 .fill.hold{background:var(--line);background-image:repeating-linear-gradient(45deg,#EADCE3 0 6px,#F4EAEF 6px 12px)}
 .rail-pct{font-family:"Bricolage Grotesque",sans-serif;font-size:16px;font-variant-numeric:tabular-nums;text-align:right}
@@ -415,7 +417,7 @@ pre.summary{
 const CONFIG = {
   // Paste the Apps Script Web App URL here (ends in /exec).
   // Leave empty to run in local demo mode, saved to this browser only.
-  API_URL: "https://script.google.com/macros/s/AKfycbybuXlljK1W03rHhSuvzmRFIqSGCaCbdhCLYjpMmpIAzgnVCK6HHo-5bbJ-kzgzAa47/exec",
+  API_URL: "https://script.google.com/macros/s/AKfycbyGo9aRVN4347ULP4uQK1wm6aEeI90AG7W3EHk6En3MW8vKSWkGrZXr12ASWojmcOsT/exec",
 
   APP_TITLE: "Project Tracker",
 
